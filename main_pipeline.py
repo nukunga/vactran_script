@@ -70,19 +70,19 @@ def get_generation_parameters(item_type):
             "angle_p45_prob": 0.5,             # 45도 각도가 선택될 확률.
             "quantity": 1,                     # VTSER 파일에 기록될 수량.
         },
-        "reducer": { # D1_cm > D2_cm, D2_cm < 0.7 * D1_cm (내부 cm 변환 후 조건)
-            "D1_inch_range": (1.0, 10.0),       # Reducer 큰 쪽 직경(D1) 범위 (단위: inch). 내부 cm 변환.
+        "reducer": { # D1_cm > D2_cm, D2_cm < 0.7 * D1_cm (D1 기준으로 샘플링)
+            "D1_inch_range": (1.0, 10.0),       # Reducer 큰 쪽 직경(D1) 샘플링 범위 (단위: inch). 내부 cm 변환.
             "D1_bin_width_inch": 1.0,           # D1 직경 샘플링 bin 너비 (단위: inch).
             "D2_inch_min_overall": 0.5,       # Reducer 작은 쪽 직경(D2) 전체 최소값 (단위: inch). 내부 cm 변환.
-            "D2_inch_max_overall": 9.5,       # Reducer 작은 쪽 직경(D2) 전체 최대값 (단위: inch). 내부 cm 변환. (D1 최대값의 70% 고려)
-            "length_cm_range": (5.0, 100.0),   # Reducer 길이 범위 (단위: cm). VACTRAN 입력 기준.
+            "D2_inch_max_overall": 6.9,       # Reducer 작은 쪽 직경(D2) 전체 최대값 (단위: inch). (D1 최대값 10인치의 69% 고려). 내부 cm 변환.
+            "length_cm_range": (5.0, 1000.0),   # Reducer 길이 범위 (단위: cm). VACTRAN 입력 기준.
         },
-        "expander": { # D2_cm > D1_cm, D1_cm < 0.7 * D2_cm (내부 cm 변환 후 조건)
-            "D1_inch_range": (1.0, 10.0),      # Expander 작은 쪽 직경(D1) 범위 (단위: inch). 내부 cm 변환. (D2 최대값의 70% 고려)
-            "D1_bin_width_inch": 1.0,           # D1 직경 샘플링 bin 너비 (단위: inch).
-            "D2_inch_min_overall": 2.0,       # Expander 큰 쪽 직경(D2) 전체 최소값 (단위: inch). 내부 cm 변환.
-            "D2_inch_max_overall": 10.0,      # Expander 큰 쪽 직경(D2) 전체 최대값 (단위: inch). 내부 cm 변환.
-            "length_cm_range": (5.0, 100.0),   # Expander 길이 범위 (단위: cm). VACTRAN 입력 기준.
+        "expander": { # D2_cm > D1_cm, D1_cm < 0.7 * D2_cm (D2 기준으로 샘플링)
+            "D2_inch_range": (1.0, 10.0),       # Expander 큰 쪽 직경(D2) 샘플링 범위 (단위: inch). 내부 cm 변환.
+            "D2_bin_width_inch": 1.0,           # D2 직경 샘플링 bin 너비 (단위: inch).
+            "D1_inch_min_overall": 0.5,       # Expander 작은 쪽 직경(D1) 전체 최소값 (단위: inch). 내부 cm 변환.
+            "D1_inch_max_overall": 6.9,       # Expander 작은 쪽 직경(D1) 전체 최대값 (단위: inch). (D2 최대값 10인치의 69% 고려). 내부 cm 변환.
+            "length_cm_range": (5.0, 1000.0),   # Expander 길이 범위 (단위: cm). VACTRAN 입력 기준.
         }
     }
 
@@ -109,14 +109,14 @@ def get_generation_parameters(item_type):
         params["description"] = (
             f"Reducer (D1_cm > D2_cm, D2_cm < 0.7*D1_cm after internal cm conversion): "
             f"D1 {params['D1_inch_range'][0]}-{params['D1_inch_range'][1]} inches (binned by {params['D1_bin_width_inch']} inch), "
-            f"D2 {params['D2_inch_min_overall']}-{params['D2_inch_max_overall']} inches, "
+            f"D2 {params['D2_inch_min_overall']}-{params['D2_inch_max_overall']} inches (overall range for D1 sampling), "
             f"Length {params['length_cm_range'][0]}-{params['length_cm_range'][1]} cm."
         )
     elif item_type == "expander":
         params["description"] = (
             f"Expander (D2_cm > D1_cm, D1_cm < 0.7*D2_cm after internal cm conversion): "
-            f"D1 {params['D1_inch_range'][0]}-{params['D1_inch_range'][1]} inches (binned by {params['D1_bin_width_inch']} inch), "
-            f"D2 {params['D2_inch_min_overall']}-{params['D2_inch_max_overall']} inches, "
+            f"D2 {params['D2_inch_range'][0]}-{params['D2_inch_range'][1]} inches (binned by {params['D2_bin_width_inch']} inch), "
+            f"D1 {params['D1_inch_min_overall']}-{params['D1_inch_max_overall']} inches (overall range for D2 sampling), "
             f"Length {params['length_cm_range'][0]}-{params['length_cm_range'][1]} cm."
         )
     
@@ -134,12 +134,18 @@ def format_specs_for_filename(item_type, params):
             d_rng_in = params.get("diameter_inch_range", ("N/A","N/A"))
             a_rng = params.get("angles_deg", ["N/A"])
             return f"D{d_rng_in[0]}-{d_rng_in[1]}in_Ang{min(a_rng)}-{max(a_rng)}deg"
-        elif item_type in ["reducer", "expander"]:
+        elif item_type == "reducer":
             d1_rng_in = params.get("D1_inch_range", ("N/A","N/A"))
-            d2_min_in = params.get("D2_inch_min_overall", "N/A") # inch로 변경
-            d2_max_in = params.get("D2_inch_max_overall", "N/A") # inch로 변경
+            d2_min_in = params.get("D2_inch_min_overall", "N/A")
+            d2_max_in = params.get("D2_inch_max_overall", "N/A")
             l_rng_cm = params.get("length_cm_range", ("N/A","N/A"))
-            return f"D1_{d1_rng_in[0]}-{d1_rng_in[1]}in_D2_{d2_min_in}-{d2_max_in}in_L{l_rng_cm[0]}-{l_rng_cm[1]}cm" # D2 단위 in으로 변경
+            return f"D1_{d1_rng_in[0]}-{d1_rng_in[1]}in_D2_{d2_min_in}-{d2_max_in}in_L{l_rng_cm[0]}-{l_rng_cm[1]}cm"
+        elif item_type == "expander": # D2 기준으로 변경
+            d2_rng_in = params.get("D2_inch_range", ("N/A","N/A"))
+            d1_min_in = params.get("D1_inch_min_overall", "N/A")
+            d1_max_in = params.get("D1_inch_max_overall", "N/A")
+            l_rng_cm = params.get("length_cm_range", ("N/A","N/A"))
+            return f"D2_{d2_rng_in[0]}-{d2_rng_in[1]}in_D1_{d1_min_in}-{d1_max_in}in_L{l_rng_cm[0]}-{l_rng_cm[1]}cm"
     except Exception:
         return "SpecError"
     return "UnknownSpec"
@@ -175,8 +181,8 @@ def generate_csv_header_specs(item_type, num_samples, seed, params):
         param_details.extend([
             f"# - D1 inch range (for binning): {params.get('D1_inch_range', 'N/A')}",
             f"# - D1 bin width inch: {params.get('D1_bin_width_inch', 'N/A')}",
-            f"# - D2 inch min overall: {params.get('D2_inch_min_overall', 'N/A')}", # cm -> inch
-            f"# - D2 inch max overall: {params.get('D2_inch_max_overall', 'N/A')}", # cm -> inch
+            f"# - D2 inch min overall (for D1 sampling): {params.get('D2_inch_min_overall', 'N/A')}",
+            f"# - D2 inch max overall (for D1 sampling): {params.get('D2_inch_max_overall', 'N/A')}",
             f"# - Length cm range (VACTRAN input): {params.get('length_cm_range', 'N/A')}"
         ])
     else:
@@ -272,10 +278,10 @@ def main():
             "--d1_bin_width_inch", str(params["D1_bin_width_inch"]),
             "--d1_inch_min", str(params["D1_inch_range"][0]),
             "--d1_inch_max", str(params["D1_inch_range"][1]),
-            "--d2_inch_min_overall", str(params["D2_inch_min_overall"]), # _cm_ -> _inch_
-            "--d2_inch_max_overall", str(params["D2_inch_max_overall"]), # _cm_ -> _inch_
-            "--length_cm_min", str(params["length_cm_range"][0]),   # Length는 cm 단위 유지
-            "--length_cm_max", str(params["length_cm_range"][1]),   # Length는 cm 단위 유지
+            "--d2_inch_min_overall", str(params["D2_inch_min_overall"]),
+            "--d2_inch_max_overall", str(params["D2_inch_max_overall"]),
+            "--length_cm_min", str(params["length_cm_range"][0]),
+            "--length_cm_max", str(params["length_cm_range"][1]),
         ])
 
 
