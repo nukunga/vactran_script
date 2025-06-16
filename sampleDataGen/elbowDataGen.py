@@ -10,7 +10,6 @@ def generate_elbow_samples(total_samples,
                            diameter_inch_min, 
                            diameter_inch_max, 
                            angles_deg_list,
-                           angle_p45_prob,
                            seed=None):
     if seed is not None:
         np.random.seed(seed)
@@ -23,16 +22,8 @@ def generate_elbow_samples(total_samples,
     rem = total_samples % n_bins
     counts = [base + (1 if i < rem else 0) for i in range(n_bins)]
 
-    if 45 in angles_deg_list:
-        num_other_angles = len(angles_deg_list) - 1
-        if num_other_angles > 0:
-            p_others = (1.0 - angle_p45_prob) / num_other_angles
-            probs = [p_others if angle != 45 else angle_p45_prob for angle in angles_deg_list]
-            probs = np.array(probs) / np.sum(probs)
-        else:
-            probs = [1.0]
-    else:
-        probs = [1.0/len(angles_deg_list)] * len(angles_deg_list)
+    # 모든 각도가 균등하게 샘플링되도록 확률 설정
+    probs = [1.0/len(angles_deg_list)] * len(angles_deg_list)
 
     records = []
     sid = 1
@@ -53,7 +44,7 @@ def generate_elbow_samples(total_samples,
 
     return pd.DataFrame(records)
 
-def run(output_file, total_samples, bin_width_inch, diameter_inch_min, diameter_inch_max, angles_deg_list, angle_p45_prob, seed):
+def run(output_file, total_samples, bin_width_inch, diameter_inch_min, diameter_inch_max, angles_deg_list, seed):
     """Generates elbow sample data and saves it to an Excel file."""
     df = generate_elbow_samples(
         total_samples=total_samples,
@@ -61,7 +52,6 @@ def run(output_file, total_samples, bin_width_inch, diameter_inch_min, diameter_
         diameter_inch_min=diameter_inch_min,
         diameter_inch_max=diameter_inch_max,
         angles_deg_list=angles_deg_list,
-        angle_p45_prob=angle_p45_prob,
         seed=seed
     )
     df.to_excel(output_file, index=False)
@@ -76,7 +66,6 @@ def main():
     parser.add_argument("--diameter_inch_min", type=float, required=True, help="최소 직경 (inch)")
     parser.add_argument("--diameter_inch_max", type=float, required=True, help="최대 직경 (inch)")
     parser.add_argument("--angles_deg", type=lambda s: [int(item) for item in s.split(',')], required=True, help="각도 리스트 (쉼표로 구분)")
-    parser.add_argument("--angle_p45_prob", type=float, required=True, help="45도 각도 샘플링 확률")
     args = parser.parse_args()
 
     run(
@@ -86,7 +75,6 @@ def main():
         diameter_inch_min=args.diameter_inch_min,
         diameter_inch_max=args.diameter_inch_max,
         angles_deg_list=args.angles_deg,
-        angle_p45_prob=args.angle_p45_prob,
         seed=args.seed
     )
 

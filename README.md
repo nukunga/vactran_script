@@ -8,26 +8,26 @@
 3.  VacTran 시뮬레이션 자동 실행 및 결과 (.txt) 저장
 4.  시뮬레이션 결과 데이터 전처리 및 최종 CSV 파일 생성
 
-파이프라인은 Pipe, Elbow, Reducer, Expander 네 가지 컴포넌트 유형을 지원하며, `main_pipeline.py` 스크립트를 통해 전체 과정을 실행할 수 있습니다.
+파이프라인은 Pipe, Elbow, Reducer, Expander 네 가지 컴포넌트 유형을 지원하며, `mainPipeline.py` 스크립트를 통해 전체 과정을 실행할 수 있습니다.
 
 ## 프로젝트 구조
 
--   `main_pipeline.py`: 전체 파이프라인을 실행하는 메인 스크립트.
+-   `mainPipeline.py`: 전체 파이프라인을 실행하는 메인 스크립트.
 -   `sampleDataGen/`: 형상 샘플 데이터(.xlsx) 생성 스크립트 폴더.
-    -   `pipeDataGen.py`
-    -   `elbowDataGen.py`
-    -   `reducerDataGen.py` (D1 > D2 인 경우)
-    -   `expanderDataGen.py` (D2 > D1 인 경우)
--   `GEN_vtser/`: Excel 데이터를 기반으로 VacTran 시리즈 파일(.VTSER) 생성 스크립트 폴더.
-    -   `Pipe_generate.py`
-    -   `Elbow_generate.py`
-    -   `Reducer_generate.py` (Reducer 및 Expander 공통 사용, CONE 타입으로 생성)
--   `auto_vac_module.py`: `.VTSER` 파일을 사용하여 VacTran 시뮬레이션을 자동 실행하고 결과를 `.txt` 파일로 저장하는 모듈.
+    -   `pipeDataGen.py`: 파이프 샘플 데이터 생성.
+    -   `elbowDataGen.py`: 엘보 샘플 데이터 생성 (모든 각도 균등 샘플링).
+    -   `reducerDataGen.py`: Reducer 샘플 데이터 생성 (D2 기준 샘플링, D1 > D2, 길이 mm 단위 입력).
+    -   `expanderDataGen.py`: Expander 샘플 데이터 생성 (D1 기준 샘플링, D2 > D1, 길이 mm 단위 입력).
+-   `genVtser/`: Excel 데이터를 기반으로 VacTran 시리즈 파일(.VTSER) 생성 스크립트 폴더.
+    -   `pipeGenerate.py` (스크립트 내 실제 파일명: `pipeGenerate.py`)
+    -   `elbowGenerate.py` (스크립트 내 실제 파일명: `elbowGenerate.py`)
+    -   `reducerGenerate.py` (Reducer 및 Expander 공통 사용, CONE 타입으로 생성, 스크립트 내 실제 파일명: `reducerGenerate.py`)
+-   `autoVacModule.py`: `.VTSER` 파일을 사용하여 VacTran 시뮬레이션을 자동 실행하고 결과를 `.txt` 파일로 저장하는 모듈.
 -   `dataPreprosessor/`: VacTran 결과(.txt)를 전처리하여 최종 `.csv` 파일을 생성하는 스크립트 폴더.
     -   `pipePrepro.py`
     -   `elbowPrepro.py`
     -   `reducerPrepro.py` (Reducer 및 Expander 공통 사용)
--   `pipeline_output_data/`: `main_pipeline.py` 실행 시 기본적으로 생성되는 최상위 출력 디렉터리. 각 실행마다 타임스탬프가 포함된 하위 폴더가 생성됩니다.
+-   `pipeline_output_data/`: `mainPipeline.py` 실행 시 기본적으로 생성되는 최상위 출력 디렉터리. 각 실행마다 아이템 타입, 스펙, 샘플 수, 시드, 타임스탬프가 포함된 하위 폴더가 생성됩니다.
 
 ## 요구사항
 
@@ -36,9 +36,10 @@
     -   `pandas`
     -   `numpy`
     -   `openpyxl` (Excel 파일 처리를 위해 pandas가 요구)
-    -   `pywinauto` (`auto_vac_module.py`에서 사용)
-    -   `clipboard` (`auto_vac_module.py`에서 사용)
+    -   `pywinauto` (`autoVacModule.py`에서 사용)
+    -   `clipboard` (`autoVacModule.py`에서 사용)
 -   VacTran 소프트웨어 설치 (버전 3 권장)
+    -   `autoVacModule.py` 내의 `VACTRAN_PATH` 변수를 실제 설치 경로로 수정해야 할 수 있습니다.
 
 ## 설치
 
@@ -48,14 +49,40 @@
 pip install pandas numpy openpyxl pywinauto clipboard
 ```
 
-## 파이프라인 실행 (`main_pipeline.py`)
+## 컴포넌트별 기본 생성 파라미터 (`mainPipeline.py` 기준)
 
-전체 파이프라인은 `main_pipeline.py` 스크립트를 통해 실행하는 것이 권장됩니다.
+`mainPipeline.py` 실행 시 각 컴포넌트 유형별로 사용되는 기본 생성 파라미터는 다음과 같습니다. (내부적으로 cm 변환 후 사용)
+
+-   **Pipe**:
+    -   직경 범위 (Diameter inch range): 1.0 - 10.0 inches
+    -   길이 범위 (Length mm range): 100 - 20000 mm
+    -   직경 Bin 너비 (Bin width inch): 1.0 inch
+-   **Elbow**:
+    -   직경 범위 (Diameter inch range): 1.0 - 5.0 inches
+    -   직경 Bin 너비 (Bin width inch): 1.0 inch
+    -   각도 목록 (Angles deg): [15, 20, 30, 45] (균등 샘플링)
+    -   수량 (Quantity): 1
+-   **Reducer** (D2 기준 샘플링, D1 > D2, D2 < 0.7 * D1):
+    -   D2 직경 범위 (D2 inch range): 1.0 - 10.0 inches
+    -   D2 Bin 너비 (D2 bin width inch): 1.0 inch
+    -   D1 전체 최소 직경 (D1 inch min overall): 0.5 inches
+    -   D1 전체 최대 직경 (D1 inch max overall): 14.3 inches (D2 최대값 10인치 / 0.7 근사)
+    -   길이 범위 (Length mm range): 50.0 - 10000.0 mm
+-   **Expander** (D1 기준 샘플링, D2 > D1, D1 < 0.7 * D2):
+    -   D1 직경 범위 (D1 inch range): 1.0 - 10.0 inches
+    -   D1 Bin 너비 (D1 bin width inch): 1.0 inch
+    -   D2 전체 최소 직경 (D2 inch min overall): 0.5 inches
+    -   D2 전체 최대 직경 (D2 inch max overall): 14.3 inches (D1 최대값 10인치 / 0.7 근사)
+    -   길이 범위 (Length mm range): 50.0 - 10000.0 mm
+
+## 파이프라인 실행 (`mainPipeline.py`)
+
+전체 파이프라인은 `mainPipeline.py` 스크립트를 통해 실행하는 것이 권장됩니다.
 
 ### 명령어 형식
 
 ```bash
-python main_pipeline.py <item_type> <num_samples> [options]
+python mainPipeline.py <item_type> <num_samples> [options]
 ```
 
 ### 인자 설명
@@ -73,58 +100,56 @@ python main_pipeline.py <item_type> <num_samples> [options]
 
 ```bash
 # Pipe 샘플 1000개 생성 (기본 시드 42, 기본 출력 폴더 사용)
-python main_pipeline.py pipe 1000
+python mainPipeline.py pipe 1000
 
 # Elbow 샘플 500개 생성 (시드 123 사용, 기본 출력 폴더 사용)
-python main_pipeline.py elbow 500 --seed 123
+python mainPipeline.py elbow 500 --seed 123
 
 # Reducer 샘플 200개 생성 (특정 출력 폴더 지정)
-python main_pipeline.py reducer 200 --base_output_dir ./my_custom_outputs
+python mainPipeline.py reducer 200 --base_output_dir ./my_custom_outputs
 
 # Expander 샘플 300개 생성
-python main_pipeline.py expander 300
+python mainPipeline.py expander 300
 ```
 
 ### 출력 디렉터리 구조
 
-`main_pipeline.py`를 실행하면 지정된 `--base_output_dir` (기본값: `pipeline_output_data`) 아래에 다음과 같은 구조로 타임스탬프가 포함된 실행별 폴더가 생성됩니다:
+`mainPipeline.py`를 실행하면 지정된 `--base_output_dir` (기본값: `pipeline_output_data`) 아래에 다음과 같은 구조로 실행별 폴더가 생성됩니다. 폴더명에는 아이템 타입, 주요 스펙, 샘플 수, 시드, 생성 타임스탬프가 포함됩니다:
 
 ```
 pipeline_output_data/
-├── 2023-03-15_12-00-00
-│   ├── pipe_samples_1000
-│   │   ├── sample_data_pipe.xlsx
-│   │   ├── vtser_files
-│   │   │   └── Pipe.vtser
-│   │   ├── txt_results
-│   │   │   └── VacTran_results_pipe.txt
-│   │   └── csv_results
-│   │       └── final_results_pipe.csv
-│   ├── elbow_samples_500
-│   │   ├── sample_data_elbow.xlsx
-│   │   ├── vtser_files
-│   │   │   └── Elbow.vtser
-│   │   ├── txt_results
-│   │   │   └── VacTran_results_elbow.txt
-│   │   └── csv_results
-│   │       └── final_results_elbow.csv
-│   └── reducer_samples_200
-│       ├── sample_data_reducer.xlsx
-│       ├── vtser_files
-│       │   └── Reducer.vtser
-│       ├── txt_results
-│       │   └── VacTran_results_reducer.txt
-│       └── csv_results
-│           └── final_results_reducer.csv
-└── 2023-03-15_12-30-00
-    └── expander_samples_300
-        ├── sample_data_expander.xlsx
-        ├── vtser_files
-        │   └── Expander.vtser
-        ├── txt_results
-        │   └── VacTran_results_expander.txt
-        └── csv_results
-            └── final_results_expander.csv
+├── pipe_1000samples_seed42_20230315_120000
+│   ├── sample_data_pipe.xlsx
+│   ├── vtser_files
+│   │   └── Pipe.vtser
+│   ├── txt_results
+│   │   └── VacTran_results_pipe.txt
+│   └── csv_results
+│       └── final_results_pipe.csv
+├── elbow_500samples_seed123_20230315_120500
+│   ├── sample_data_elbow.xlsx
+│   ├── vtser_files
+│   │   └── Elbow.vtser
+│   ├── txt_results
+│   │   └── VacTran_results_elbow.txt
+│   └── csv_results
+│       └── final_results_elbow.csv
+├── reducer_200samples_seed42_20230315_121000
+│   ├── sample_data_reducer.xlsx
+│   ├── vtser_files
+│   │   └── Reducer.vtser
+│   ├── txt_results
+│   │   └── VacTran_results_reducer.txt
+│   └── csv_results
+│       └── final_results_reducer.csv
+└── expander_300samples_seed42_20230315_121500
+    ├── sample_data_expander.xlsx
+    ├── vtser_files
+    │   └── Expander.vtser
+    ├── txt_results
+    │   └── VacTran_results_expander.txt
+    └── csv_results
+        └── final_results_expander.csv
 ```
 
 ## 수동 단계별 실행 (참고용)
@@ -161,23 +186,23 @@ pipeline_output_data/
 
 -   **Pipe VTSER 생성:**
     ```bash
-    python GEN_vtser/Pipe_generate.py <입력_Excel_경로_pipe.xlsx> --output_dir <VTSER_저장_폴더_pipe>
+    python genVtser/Pipe_generate.py <입력_Excel_경로_pipe.xlsx> --output_dir <VTSER_저장_폴더_pipe>
     ```
 
 -   **Elbow VTSER 생성:**
     ```bash
-    python GEN_vtser/Elbow_generate.py <입력_Excel_경로_elbow.xlsx> --output_dir <VTSER_저장_폴더_elbow>
+    python genVtser/Elbow_generate.py <입력_Excel_경로_elbow.xlsx> --output_dir <VTSER_저장_폴더_elbow>
     ```
 
 -   **Reducer VTSER 생성:**
     ```bash
-    python GEN_vtser/Reducer_generate.py <입력_Excel_경로_reducer.xlsx> --output_dir <VTSER_저장_폴더_reducer>
+    python genVtser/Reducer_generate.py <입력_Excel_경로_reducer.xlsx> --output_dir <VTSER_저장_폴더_reducer>
     ```
 
 -   **Expander VTSER 생성:**
     (Reducer와 동일한 `Reducer_generate.py` 스크립트 사용)
     ```bash
-    python GEN_vtser/Reducer_generate.py <입력_Excel_경로_expander.xlsx> --output_dir <VTSER_저장_폴더_expander>
+    python genVtser/Reducer_generate.py <입력_Excel_경로_expander.xlsx> --output_dir <VTSER_저장_폴더_expander>
     ```
 
 ### 3단계: VacTran 자동 실행 및 TXT 결과 생성

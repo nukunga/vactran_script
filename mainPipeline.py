@@ -27,22 +27,21 @@ def get_generation_parameters(item_type):
             "diameter_inch_range": (1.0, 5.0), # 엘보 직경 범위 (단위: inch). 내부적으로 cm로 변환.
             "bin_width_inch": 1.0,             # 직경 샘플링 시 사용될 bin의 너비 (단위: inch).
             "angles_deg": [15, 20, 30, 45],    # 생성될 엘보의 각도 목록.
-            "angle_p45_prob": 0.5,             # 45도 각도가 선택될 확률.
             "quantity": 1,                     # VTSER 파일에 기록될 수량.
         },
-        "reducer": { # D1_cm > D2_cm, D2_cm < 0.7 * D1_cm (D1 기준으로 샘플링)
-            "D1_inch_range": (1.0, 10.0),       # Reducer 큰 쪽 직경(D1) 샘플링 범위 (단위: inch). 내부 cm 변환.
-            "D1_bin_width_inch": 1.0,           # D1 직경 샘플링 bin 너비 (단위: inch).
-            "D2_inch_min_overall": 0.5,       # Reducer 작은 쪽 직경(D2) 전체 최소값 (단위: inch). 내부 cm 변환.
-            "D2_inch_max_overall": 6.9,       # Reducer 작은 쪽 직경(D2) 전체 최대값 (단위: inch). (D1 최대값 10인치의 69% 고려). 내부 cm 변환.
-            "length_cm_range": (5.0, 1000.0),   # Reducer 길이 범위 (단위: cm). VACTRAN 입력 기준.
-        },
-        "expander": { # D2_cm > D1_cm, D1_cm < 0.7 * D2_cm (D2 기준으로 샘플링)
-            "D2_inch_range": (1.0, 10.0),       # Expander 큰 쪽 직경(D2) 샘플링 범위 (단위: inch). 내부 cm 변환.
+        "reducer": { # D2 기준으로 샘플링, D1_cm > D2_cm, D2_cm < 0.7 * D1_cm
+            "D2_inch_range": (1.0, 10.0),       # Reducer 작은 쪽 직경(D2) 샘플링 범위 (단위: inch). 내부 cm 변환.
             "D2_bin_width_inch": 1.0,           # D2 직경 샘플링 bin 너비 (단위: inch).
-            "D1_inch_min_overall": 0.5,       # Expander 작은 쪽 직경(D1) 전체 최소값 (단위: inch). 내부 cm 변환.
-            "D1_inch_max_overall": 6.9,       # Expander 작은 쪽 직경(D1) 전체 최대값 (단위: inch). (D2 최대값 10인치의 69% 고려). 내부 cm 변환.
-            "length_cm_range": (5.0, 1000.0),   # Expander 길이 범위 (단위: cm). VACTRAN 입력 기준.
+            "D1_inch_min_overall": 0.5,       # Reducer 큰 쪽 직경(D1) 전체 최소값 (단위: inch). 내부 cm 변환.
+            "D1_inch_max_overall": 14.3,      # Reducer 큰 쪽 직경(D1) 전체 최대값 (단위: inch). (D2 최대값 10인치 / 0.7 고려). 내부 cm 변환.
+            "length_mm_range": (50.0, 10000.0), # Reducer 길이 범위 (단위: mm). VACTRAN 입력 기준 cm 변환.
+        },
+        "expander": { # D1 기준으로 샘플링, D2_cm > D1_cm, D1_cm < 0.7 * D2_cm
+            "D1_inch_range": (1.0, 10.0),       # Expander 작은 쪽 직경(D1) 샘플링 범위 (단위: inch). 내부 cm 변환.
+            "D1_bin_width_inch": 1.0,           # D1 직경 샘플링 bin 너비 (단위: inch).
+            "D2_inch_min_overall": 0.5,       # Expander 큰 쪽 직경(D2) 전체 최소값 (단위: inch). 내부 cm 변환.
+            "D2_inch_max_overall": 14.3,      # Expander 큰 쪽 직경(D2) 전체 최대값 (단위: inch). (D1 최대값 10인치 / 0.7 고려). 내부 cm 변환.
+            "length_mm_range": (50.0, 10000.0), # Expander 길이 범위 (단위: mm). VACTRAN 입력 기준 cm 변환.
         }
     }
 
@@ -61,23 +60,22 @@ def get_generation_parameters(item_type):
         params["description"] = (
             f"Elbow: Diameter {params['diameter_inch_range'][0]}-{params['diameter_inch_range'][1]} inches "
             f"(binned by {params['bin_width_inch']} inch, converted to cm internally), "
-            f"Angles ({', '.join(map(str, params['angles_deg']))} deg "
-            f"with {params['angles_deg'][-1]}deg >= {params['angle_p45_prob']*100:.0f}% prob). "
+            f"Angles ({', '.join(map(str, params['angles_deg']))} deg, sampled uniformly). " # 수정: angle_p45_prob 제거
             f"Quantity={params['quantity']}."
         )
     elif item_type == "reducer":
-        params["description"] = (
-            f"Reducer (D1_cm > D2_cm, D2_cm < 0.7*D1_cm after internal cm conversion): "
-            f"D1 {params['D1_inch_range'][0]}-{params['D1_inch_range'][1]} inches (binned by {params['D1_bin_width_inch']} inch), "
-            f"D2 {params['D2_inch_min_overall']}-{params['D2_inch_max_overall']} inches (overall range for D1 sampling), "
-            f"Length {params['length_cm_range'][0]}-{params['length_cm_range'][1]} cm."
+        params["description"] = ( # D2 기준으로 샘플링 설명 변경
+            f"Reducer (D2 binned, D1_cm > D2_cm, D2_cm < 0.7*D1_cm after internal cm conversion): "
+            f"D2 {params['D2_inch_range'][0]}-{params['D2_inch_range'][1]} inches (binned by {params['D2_bin_width_inch']} inch), "
+            f"D1 {params['D1_inch_min_overall']}-{params['D1_inch_max_overall']} inches (overall range for D2 sampling), "
+            f"Length {params['length_mm_range'][0]}-{params['length_mm_range'][1]} mm (converted to cm internally)." # cm -> mm
         )
     elif item_type == "expander":
-        params["description"] = (
-            f"Expander (D2_cm > D1_cm, D1_cm < 0.7*D2_cm after internal cm conversion): "
-            f"D2 {params['D2_inch_range'][0]}-{params['D2_inch_range'][1]} inches (binned by {params['D2_bin_width_inch']} inch), "
-            f"D1 {params['D1_min_overall']}-{params['D1_max_overall']} inches (overall range for D2 sampling), "
-            f"Length {params['length_cm_range'][0]}-{params['length_cm_range'][1]} cm."
+        params["description"] = ( # D1 기준으로 샘플링 설명 변경
+            f"Expander (D1 binned, D2_cm > D1_cm, D1_cm < 0.7*D2_cm after internal cm conversion): "
+            f"D1 {params['D1_inch_range'][0]}-{params['D1_inch_range'][1]} inches (binned by {params['D1_bin_width_inch']} inch), "
+            f"D2 {params['D2_inch_min_overall']}-{params['D2_inch_max_overall']} inches (overall range for D1 sampling), "
+            f"Length {params['length_mm_range'][0]}-{params['length_mm_range'][1]} mm (converted to cm internally)." # cm -> mm
         )
     return params
 
@@ -93,18 +91,18 @@ def format_specs_for_filename(item_type, params):
             d_rng_in = params.get("diameter_inch_range", ("N/A","N/A"))
             a_rng = params.get("angles_deg", ["N/A"])
             return f"D{d_rng_in[0]}-{d_rng_in[1]}in_Ang{min(a_rng)}-{max(a_rng)}deg"
-        elif item_type == "reducer":
-            d1_rng_in = params.get("D1_inch_range", ("N/A","N/A"))
-            d2_min_in = params.get("D2_inch_min_overall", "N/A")
-            d2_max_in = params.get("D2_inch_max_overall", "N/A")
-            l_rng_cm = params.get("length_cm_range", ("N/A","N/A"))
-            return f"D1_{d1_rng_in[0]}-{d1_rng_in[1]}in_D2_{d2_min_in}-{d2_max_in}in_L{l_rng_cm[0]}-{l_rng_cm[1]}cm"
-        elif item_type == "expander": # D2 기준으로 변경
+        elif item_type == "reducer": # D2 기준으로 변경, 길이 mm
             d2_rng_in = params.get("D2_inch_range", ("N/A","N/A"))
             d1_min_in = params.get("D1_inch_min_overall", "N/A")
             d1_max_in = params.get("D1_inch_max_overall", "N/A")
-            l_rng_cm = params.get("length_cm_range", ("N/A","N/A"))
-            return f"D2_{d2_rng_in[0]}-{d2_rng_in[1]}in_D1_{d1_min_in}-{d1_max_in}in_L{l_rng_cm[0]}-{l_rng_cm[1]}cm"
+            l_rng_mm = params.get("length_mm_range", ("N/A","N/A")) # cm -> mm
+            return f"D2_{d2_rng_in[0]}-{d2_rng_in[1]}in_D1_{d1_min_in}-{d1_max_in}in_L{l_rng_mm[0]}-{l_rng_mm[1]}mm" # cm -> mm
+        elif item_type == "expander": # D1 기준으로 변경, 길이 mm
+            d1_rng_in = params.get("D1_inch_range", ("N/A","N/A"))
+            d2_min_in = params.get("D2_inch_min_overall", "N/A")
+            d2_max_in = params.get("D2_inch_max_overall", "N/A")
+            l_rng_mm = params.get("length_mm_range", ("N/A","N/A")) # cm -> mm
+            return f"D1_{d1_rng_in[0]}-{d1_rng_in[1]}in_D2_{d2_min_in}-{d2_max_in}in_L{l_rng_mm[0]}-{l_rng_mm[1]}mm" # cm -> mm
     except Exception:
         return "SpecError"
     return "UnknownSpec"
@@ -133,15 +131,25 @@ def generate_csv_header_specs(item_type, num_samples, seed, params):
         param_details.extend([
             f"# - Diameter inch range (for binning): {params.get('diameter_inch_range', 'N/A')}",
             f"# - Bin width inch: {params.get('bin_width_inch', 'N/A')}",
-            f"# - Angles deg: {params.get('angles_deg', 'N/A')}",
-            f"# - Angle P45 prob: {params.get('angle_p45_prob', 'N/A')}",
+            f"# - Angles deg: {params.get('angles_deg', 'N/A')}", # angle_p45_prob 제거
             f"# - Quantity: {params.get('quantity', 'N/A')}"
         ])
-    elif item_type in ["reducer", "expander"]:
-        # This part has been simplified as the specific keys might differ
-        for key, value in params.items():
-            if key != "description":
-                param_details.append(f"# - {key.replace('_', ' ').capitalize()}: {value}")
+    elif item_type == "reducer": # D2 기준, 길이 mm
+        param_details.extend([
+            f"# - D2 inch range (for binning): {params.get('D2_inch_range', 'N/A')}",
+            f"# - D2 bin width inch: {params.get('D2_bin_width_inch', 'N/A')}",
+            f"# - D1 inch min overall: {params.get('D1_inch_min_overall', 'N/A')}",
+            f"# - D1 inch max overall: {params.get('D1_inch_max_overall', 'N/A')}",
+            f"# - Length mm range: {params.get('length_mm_range', 'N/A')}" # cm -> mm
+        ])
+    elif item_type == "expander": # D1 기준, 길이 mm
+        param_details.extend([
+            f"# - D1 inch range (for binning): {params.get('D1_inch_range', 'N/A')}",
+            f"# - D1 bin width inch: {params.get('D1_bin_width_inch', 'N/A')}",
+            f"# - D2 inch min overall: {params.get('D2_inch_min_overall', 'N/A')}",
+            f"# - D2 inch max overall: {params.get('D2_inch_max_overall', 'N/A')}",
+            f"# - Length mm range: {params.get('length_mm_range', 'N/A')}" # cm -> mm
+        ])
 
     header_lines.extend(param_details)
     header_lines.append(f"# Description: {params.get('description', 'N/A')}")
@@ -212,35 +220,34 @@ def main():
                 diameter_inch_min=params["diameter_inch_range"][0],
                 diameter_inch_max=params["diameter_inch_range"][1],
                 angles_deg_list=params["angles_deg"],
-                angle_p45_prob=params["angle_p45_prob"],
                 seed=seed
             )
-        elif item_type == 'reducer':
+        elif item_type == 'reducer': # D2 기준, 길이 mm
             params = generation_params
             reducerDataGen.run(
                  output_file=sample_data_excel_path,
                  total_samples=num_samples,
-                 d1_bin_width_inch=params["D1_bin_width_inch"],
-                 d1_inch_min=params["D1_inch_range"][0],
-                 d1_inch_max=params["D1_inch_range"][1],
-                 d2_inch_min_overall=params["D2_inch_min_overall"],
-                 d2_inch_max_overall=params["D2_inch_max_overall"],
-                 length_cm_min=params["length_cm_range"][0],
-                 length_cm_max=params["length_cm_range"][1],
+                 d2_bin_width_inch=params["D2_bin_width_inch"],       # D1 -> D2
+                 d2_inch_min=params["D2_inch_range"][0],             # D1 -> D2
+                 d2_inch_max=params["D2_inch_range"][1],             # D1 -> D2
+                 d1_inch_min_overall=params["D1_inch_min_overall"], # D2 -> D1
+                 d1_inch_max_overall=params["D1_inch_max_overall"], # D2 -> D1
+                 length_mm_min=params["length_mm_range"][0],         # cm -> mm
+                 length_mm_max=params["length_mm_range"][1],         # cm -> mm
                  seed=seed
             )
-        elif item_type == 'expander':
+        elif item_type == 'expander': # D1 기준, 길이 mm
             params = generation_params
             expanderDataGen.run(
                 output_file=sample_data_excel_path,
                 total_samples=num_samples,
-                d2_bin_width_inch=params["D2_bin_width_inch"],
-                d2_inch_min=params["D2_inch_range"][0],
-                d2_inch_max=params["D2_inch_range"][1],
-                d1_inch_min_overall=params["D1_inch_min_overall"],
-                d1_inch_max_overall=params["D1_inch_max_overall"],
-                length_cm_min=params["length_cm_range"][0],
-                length_cm_max=params["length_cm_range"][1],
+                d1_bin_width_inch=params["D1_bin_width_inch"],       # D2 -> D1
+                d1_inch_min=params["D1_inch_range"][0],             # D2 -> D1
+                d1_inch_max=params["D1_inch_range"][1],             # D2 -> D1
+                d2_inch_min_overall=params["D2_inch_min_overall"], # D1 -> D2
+                d2_inch_max_overall=params["D2_inch_max_overall"], # D1 -> D2
+                length_mm_min=params["length_mm_range"][0],         # cm -> mm
+                length_mm_max=params["length_mm_range"][1],         # cm -> mm
                 seed=seed
             )
         print(f"샘플 데이터 생성 완료: {sample_data_excel_path}")
