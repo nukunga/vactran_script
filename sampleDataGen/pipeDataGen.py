@@ -43,31 +43,36 @@ def generate_binned_samples(total_samples, bin_width_inch,
     
     return pd.DataFrame(records)
 
+def run(output_file, total_samples, bin_width_inch, diameter_inch_min, diameter_inch_max, length_mm_min, length_mm_max, seed):
+    """Generates sample data and saves it to an Excel file."""
+    df = generate_binned_samples(
+        total_samples=total_samples,
+        bin_width_inch=bin_width_inch,
+        diameter_inch_min=diameter_inch_min,
+        diameter_inch_max=diameter_inch_max,
+        length_mm_min=length_mm_min,
+        length_mm_max=length_mm_max,
+        seed=seed
+    )
+    df.to_excel(output_file, index=False)
+    print(f"완료: '{output_file}'에 {len(df)}개의 샘플을 저장했습니다.")
+
 def main():
     parser = argparse.ArgumentParser(
         description="파이프 샘플 데이터를 inch/mm 단위 스펙으로 받아 cm로 변환하여 생성"
     )
-    parser.add_argument(
-        "n", type=int,
-        help="생성할 전체 샘플 수 (예: 1000)"
-    )
-    parser.add_argument(
-        "-o", "--output", default="pipe_samples.xlsx",
-        help="출력 엑셀 파일명 (기본: pipe_samples.xlsx)"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=42,
-        help="난수 시드 (재현용)"
-    )
+    parser.add_argument("n", type=int, help="생성할 전체 샘플 수 (예: 1000)")
+    parser.add_argument("-o", "--output", default="pipe_samples.xlsx", help="출력 엑셀 파일명")
+    parser.add_argument("--seed", type=int, default=42, help="난수 시드 (재현용)")
     parser.add_argument("--bin_width_inch", type=float, required=True, help="직경 bin의 너비 (inch)")
     parser.add_argument("--diameter_inch_min", type=float, required=True, help="최소 직경 (inch)")
     parser.add_argument("--diameter_inch_max", type=float, required=True, help="최대 직경 (inch)")
     parser.add_argument("--length_mm_min", type=float, required=True, help="최소 길이 (mm)")
     parser.add_argument("--length_mm_max", type=float, required=True, help="최대 길이 (mm)")
-
     args = parser.parse_args()
 
-    df = generate_binned_samples(
+    run(
+        output_file=args.output,
         total_samples=args.n,
         bin_width_inch=args.bin_width_inch,
         diameter_inch_min=args.diameter_inch_min,
@@ -76,8 +81,6 @@ def main():
         length_mm_max=args.length_mm_max,
         seed=args.seed
     )
-    df.to_excel(args.output, index=False)
-    print(f"완료: '{args.output}'에 {len(df)}개의 샘플을 저장했습니다.")
 
 if __name__ == "__main__":
     main()

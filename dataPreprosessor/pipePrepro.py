@@ -7,9 +7,7 @@ import argparse
 import pandas as pd
 from pathlib import Path
 
-# --- 추가된 부분 시작 ---
-
-# Pipe에 대한 추가 컬럼 정의 (항목은 예시이며, 실제 모델 데이터에 맞게 수정 가능)
+# Column definitions remain the same
 NEW_COLUMNS_PIPE = [
     "Viscous_K_total", "Friction_factor", "Molecular_Conductance_Lpm",
     "Long_tube_alpha", "Combined_alpha", "Viscous_flow_region_at_pressures", 
@@ -17,6 +15,8 @@ NEW_COLUMNS_PIPE = [
 ]
 BASE_COLUMNS_PIPE = ["SampleID", "Diameter_cm", "Length_cm", "Pressure_Torr", "Conductance_L_per_min"]
 ALL_COLUMNS_PIPE = BASE_COLUMNS_PIPE + NEW_COLUMNS_PIPE
+
+# Helper functions (extract_value, parse_pipe_block_data, parse_pipe_file) remain the same
 
 def extract_value(pattern, text, group_index=1, data_type=float, default=None):
     """정규식 패턴을 사용하여 텍스트에서 값을 추출합니다."""
@@ -39,13 +39,8 @@ def parse_pipe_block_data(pipe_block_text):
     data["Viscous_flow_region_at_pressures"] = extract_value(r"Viscous flow region at pressures\s*>\s*([\d\.E+-]+)\s*Torr", pipe_block_text)
     data["Molecular_flow_region_at_pressures"] = extract_value(r"Molecular flow region at pressures\s*<\s*([\d\.E+-]+)\s*Torr", pipe_block_text)
     return data
-
-# --- 추가된 부분 끝 ---
-
+    
 def parse_pipe_file(path, start_sample_id, model_data_blocks: list):
-    """
-    주어진 Pipe 파일을 파싱하고, model_data_blocks의 해당 Pipe 데이터와 결합합니다.
-    """
     rows = []
     assigned_sample_id = start_sample_id
     current_sample_id_in_file = 0
@@ -61,7 +56,6 @@ def parse_pipe_file(path, start_sample_id, model_data_blocks: list):
             header_found = False
             diameter_cm, length_cm = None, None
             
-            # 헤더 정보 찾기 (최대 2줄까지 탐색)
             for j in range(header_line_index, min(header_line_index + 2, len(lines))):
                 header = lines[j]
                 m2 = re.search(r'\d+\s*PIPE,\s*L=\s*([\d\.E+-]+)\s*Cm,\s*D=\s*([\d\.E+-]+)\s*Cm', header)
@@ -69,19 +63,14 @@ def parse_pipe_file(path, start_sample_id, model_data_blocks: list):
                     length_cm = float(m2.group(1))
                     diameter_cm = float(m2.group(2))
                     header_found = True
-                    i = j # 데이터 시작 위치를 위해 인덱스 업데이트
+                    i = j
                     break
 
             if not header_found:
                 i += 1
                 continue
 
-            additional_data = {}
-            if current_sample_id_in_file < len(model_data_blocks):
-                additional_data = model_data_blocks[current_sample_id_in_file]
-            else:
-                for col in NEW_COLUMNS_PIPE:
-                    additional_data[col] = None
+            additional_data = model_data_blocks[current_sample_id_in_file] if current_sample_id_in_file < len(model_data_blocks) else {col: None for col in NEW_COLUMNS_PIPE}
 
             data_cursor = i + 1
             data_parsed_this_block = False
@@ -95,15 +84,9 @@ def parse_pipe_file(path, start_sample_id, model_data_blocks: list):
 
                 m3 = re.match(r'\s*\d+\)\s*([\d\.E+-]+),\s*([\d\.E+-]+)', line_content)
                 if m3:
-                    pressure = float(m3.group(1))
-                    conductance = float(m3.group(2))
-                    
                     row_data = {
-                        'SampleID': assigned_sample_id,
-                        'Diameter_cm': diameter_cm,
-                        'Length_cm': length_cm,
-                        'Pressure_Torr': pressure,
-                        'Conductance_L_per_min': conductance,
+                        'SampleID': assigned_sample_id, 'Diameter_cm': diameter_cm, 'Length_cm': length_cm,
+                        'Pressure_Torr': float(m3.group(1)), 'Conductance_L_per_min': float(m3.group(2)),
                     }
                     row_data.update(additional_data)
                     rows.append(row_data)
@@ -121,33 +104,27 @@ def parse_pipe_file(path, start_sample_id, model_data_blocks: list):
 
     return rows, assigned_sample_id
 
-def main():
-    parser = argparse.ArgumentParser(description='PIPE 시리즈 텍스트 파일들을 파싱하여 CSV로 저장합니다.')
-    parser.add_argument('input_path', help='입력할 텍스트 파일 또는 디렉터리 경로')
-    parser.add_argument('-o', '--output', default='pipe_output.csv', help='출력 CSV 파일명')
-    args = parser.parse_args()
-
-    input_path_obj = Path(args.input_path)
+def run(input_path_str, output_file):
+    """Parses VACTRAN TXT output files and generates a final CSV."""
+    input_path_obj = Path(input_path_str)
     if input_path_obj.is_dir():
         txt_files = sorted([f for f in input_path_obj.glob('*.txt') if not f.name.endswith('_model.txt')])
     elif input_path_obj.is_file() and not input_path_obj.name.endswith('_model.txt'):
         txt_files = [input_path_obj]
     else:
-        print(f"Error: 유효하지 않은 경로이거나 _model.txt 파일입니다: {args.input_path}")
+        print(f"Error: Invalid path or _model.txt file provided: {input_path_str}")
         sys.exit(1)
 
     if not txt_files:
-        print("처리할 .txt 파일을 찾을 수 없습니다.")
-        df_empty = pd.DataFrame(columns=ALL_COLUMNS_PIPE)
-        df_empty.to_csv(args.output, index=False)
-        print(f"헤더만 있는 빈 파일 생성: {args.output}")
+        print("No .txt files found to process.")
+        pd.DataFrame(columns=ALL_COLUMNS_PIPE).to_csv(output_file, index=False)
+        print(f"Empty CSV with headers created: {output_file}")
         return
 
     all_rows = []
     global_sample_id_counter = 1
     for p_txt in txt_files:
         print(f"Parsing {p_txt.name} …")
-
         model_file_path = p_txt.with_name(p_txt.stem + "_model.txt")
         current_file_model_data_blocks = []
         if model_file_path.exists():
@@ -155,26 +132,29 @@ def main():
                 model_content = mf.read()
                 pipe_block_sections = re.finditer(r"(\d+ PIPE\(s\).*?)(?=\n\s*\d+ PIPE\(s\)|\Z)", model_content, re.DOTALL)
                 for section_match in pipe_block_sections:
-                    block_text = section_match.group(1)
-                    if "Friction factor" in block_text:
-                        current_file_model_data_blocks.append(parse_pipe_block_data(block_text))
-        else:
-            print(f"Warning: Model file not found: {model_file_path}. Additional data for {p_txt.name} will be empty.")
-
+                    if "Friction factor" in section_match.group(1):
+                        current_file_model_data_blocks.append(parse_pipe_block_data(section_match.group(1)))
+        
         rows, next_start_sample_id = parse_pipe_file(p_txt, global_sample_id_counter, current_file_model_data_blocks)
         all_rows.extend(rows)
         global_sample_id_counter = next_start_sample_id
 
     if not all_rows:
-        print("파싱된 데이터가 없습니다.")
-        df_empty = pd.DataFrame(columns=ALL_COLUMNS_PIPE)
-        df_empty.to_csv(args.output, index=False)
-        print(f"헤더만 있는 빈 파일 생성: {args.output}")
+        print("No data was parsed.")
+        pd.DataFrame(columns=ALL_COLUMNS_PIPE).to_csv(output_file, index=False)
+        print(f"Empty CSV with headers created: {output_file}")
         return
 
     df = pd.DataFrame(all_rows, columns=ALL_COLUMNS_PIPE)
-    df.to_csv(args.output, index=False)
-    print(f"완료: {args.output}에 저장되었습니다.")
+    df.to_csv(output_file, index=False)
+    print(f"Completed: Saved to {output_file}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Parse PIPE series text files into a single CSV.')
+    parser.add_argument('input_path', help='Input text file or directory path.')
+    parser.add_argument('-o', '--output', default='pipe_output.csv', help='Output CSV filename.')
+    args = parser.parse_args()
+    run(args.input_path, args.output)
 
 if __name__ == '__main__':
     main()
