@@ -184,8 +184,10 @@ def main():
     parser = argparse.ArgumentParser(description="데이터 생성 및 처리 파이프라인")
     parser.add_argument("item_type", choices=["pipe", "elbow", "reducer", "expander"], help="처리할 항목 타입")
     parser.add_argument("num_samples", type=int, help="생성할 샘플 데이터 수량")
-    parser.add_argument("--seed", type=int, default=42, help="데이터 생성 시 사용할 난수 시드 (기본값: 42)")
+    parser.add_argument("--seed", "-s",type=int, default=42, help="데이터 생성 시 사용할 난수 시드 (기본값: 42)")
     parser.add_argument("--base_output_dir", default=os.path.join(PROJECT_ROOT, "pipeline_output_data"), help="최상위 출력 디렉터리")
+    # 아래 라인 추가: 동시 실행 개수(n)를 지정하는 옵션
+    parser.add_argument("--concurrency","-c" ,type=int, default=4, help="VacTran 동시 실행 프로세스 수 (기본값: 4)")
     args = parser.parse_args()
 
     item_type = args.item_type
@@ -283,16 +285,18 @@ def main():
         sys.exit(1)
 
     # --- 3. auto_vac_module 실행 ---
-    print(f"\n[단계 3/{total_steps}] VacTran 자동화 실행 중...")
+    # 출력 메시지와 함수 호출 부분 수정
+    print(f"\n[단계 3/{total_steps}] VacTran 자동화 실행 중 (동시 실행: {args.concurrency})...")
     try:
         if not AUTO_VAC_MODULE_AVAILABLE:
-            # AUTO_VAC_MODULE_AVAILABLE 플래그를 사용하여 모듈 로드 실패 시 사용자에게 알림
             raise ImportError("VacTran automation (step 3) skipped: 'autoVacModule' could not be loaded, likely due to a missing 'clipboard' dependency. Check startup warnings.")
         
-        run_vactran_automation(vtser_output_dir, txt_output_dir) # 실제 함수 또는 플레이스홀더 함수가 호출됨
+        # concurrency 인자를 전달하도록 함수 호출 수정
+        run_vactran_automation(vtser_output_dir, txt_output_dir, concurrency=args.concurrency)
+        
         print(f"VacTran 자동화 완료. TXT 파일 저장 위치: {txt_output_dir}")
         print(f"--- 단계 3/{total_steps} 완료 ({(3/total_steps)*100:.0f}%) ---")
-    except ImportError as e_imp: # autoVacModule 로드 실패 또는 플레이스홀더 호출로 인한 ImportError
+    except ImportError as e_imp:
         print(f"!!! VacTran 자동화 중단 (ImportError): {e_imp} !!!")
         print("파이프라인의 이 단계는 건너뛰고 다음 단계로 진행하지 않습니다. 문제를 해결하고 다시 시도해주세요.")
         sys.exit(1)

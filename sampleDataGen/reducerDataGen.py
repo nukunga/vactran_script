@@ -63,7 +63,7 @@ def generate_reducer_samples(total_samples,
             
             # Reducer 조건: D1_cm > D2_cm and D2_cm < 0.7 * D1_cm
             # if not (d1_cm_sample > d2_cm_sample and d2_cm_sample < (d1_cm_sample * 0.7)):
-            if not (d1_cm_sample > d2_cm_sample and d2_cm_sample < (d1_cm_sample)):
+            if not (d1_cm_sample > d2_cm_sample):
                 continue # 조건 불만족시 다음 시도
 
             length_mm_sample = np.random.uniform(len_low_mm, len_high_mm)

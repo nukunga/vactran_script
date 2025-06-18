@@ -63,7 +63,7 @@ def generate_expander_samples(total_samples,
             
             # Expander 조건: D2_cm > D1_cm and D1_cm < 0.7 * D2_cm
             # if not (d2_cm_sample > d1_cm_sample and d1_cm_sample < (d2_cm_sample * 0.7)):
-            if not (d2_cm_sample > d1_cm_sample and d1_cm_sample < (d2_cm_sample)):
+            if not (d2_cm_sample > d1_cm_sample):
                 continue # 조건 불만족시 다음 시도
 
             length_mm_sample = np.random.uniform(len_low_mm, len_high_mm)
