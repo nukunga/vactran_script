@@ -4,76 +4,84 @@
 import numpy as np
 import pandas as pd
 import argparse
+import itertools # itertools 추가
 
 def generate_elbow_samples(total_samples,
-                           bin_width_inch, 
-                           diameter_inch_min, 
-                           diameter_inch_max, 
+                           diameter_inch_spec, # (min, max, num_intervals)
                            angles_deg_list,
                            seed=None):
     if seed is not None:
         np.random.seed(seed)
 
-    edges_in = np.arange(diameter_inch_min, diameter_inch_max + 1e-8, bin_width_inch)
-    bins_in = [(edges_in[i], edges_in[i+1]) for i in range(len(edges_in)-1)]
-    n_bins = len(bins_in)
+    # 직경 구간 생성
+    dia_min_in, dia_max_in, dia_intervals = diameter_inch_spec
+    dia_edges_in = np.linspace(dia_min_in, dia_max_in, int(dia_intervals) + 1)
+    dia_bins_in = [(dia_edges_in[i], dia_edges_in[i+1]) for i in range(int(dia_intervals))]
 
-    base = total_samples // n_bins
-    rem = total_samples % n_bins
-    counts = [base + (1 if i < rem else 0) for i in range(n_bins)]
+    # 각도는 주어진 리스트 그대로 사용
+    # 모든 파라미터 조합 생성 (직경 구간 * 각도)
+    param_combinations = list(itertools.product(dia_bins_in, angles_deg_list))
 
-    # 모든 각도가 균등하게 샘플링되도록 확률 설정
-    probs = [1.0/len(angles_deg_list)] * len(angles_deg_list)
+    if not param_combinations:
+        return pd.DataFrame(columns=["SampleID", "Diameter_cm", "BendAngle_deg", "Quantity"])
+
+    n_combinations = len(param_combinations)
+    
+    base_samples_per_combo = total_samples // n_combinations
+    remainder_samples = total_samples % n_combinations
+    counts_per_combo = [base_samples_per_combo + (1 if i < remainder_samples else 0) for i in range(n_combinations)]
 
     records = []
     sid = 1
-    for (low_in, high_in), cnt in zip(bins_in, counts):
+    for combo_idx, ((low_in, high_in), angle_deg) in enumerate(param_combinations):
+        cnt = counts_per_combo[combo_idx]
+        if cnt == 0:
+            continue
+            
         diam_in_samples = np.random.uniform(low_in, high_in, size=cnt)
         diam_cm_samples = diam_in_samples * 2.54
 
-        bends = np.random.choice(angles_deg_list, size=cnt, p=probs)
-
-        for d_cm, a in zip(diam_cm_samples, bends):
+        for d_cm in diam_cm_samples:
             records.append({
                 "SampleID":       sid,
                 "Diameter_cm":    round(d_cm, 4),
-                "BendAngle_deg":  int(a),
+                "BendAngle_deg":  int(angle_deg),
                 "Quantity":       1
             })
             sid += 1
 
     return pd.DataFrame(records)
 
-def run(output_file, total_samples, bin_width_inch, diameter_inch_min, diameter_inch_max, angles_deg_list, seed):
+def run(output_file, total_samples, diameter_inch_spec, angles_deg_list, seed):
     """Generates elbow sample data and saves it to an Excel file."""
     df = generate_elbow_samples(
         total_samples=total_samples,
-        bin_width_inch=bin_width_inch,
-        diameter_inch_min=diameter_inch_min,
-        diameter_inch_max=diameter_inch_max,
+        diameter_inch_spec=diameter_inch_spec,
         angles_deg_list=angles_deg_list,
         seed=seed
     )
     df.to_excel(output_file, index=False)
     print(f"완료: '{output_file}'에 {len(df)}개의 Elbow 샘플을 저장했습니다.")
 
+def parse_spec(s):
+    parts = s.split(',')
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError("Specification must be min,max,num_intervals")
+    return float(parts[0]), float(parts[1]), int(parts[2])
+
 def main():
-    parser = argparse.ArgumentParser(description="Elbow 샘플 데이터를 inch 단위 스펙으로 받아 cm로 변환하여 생성")
+    parser = argparse.ArgumentParser(description="Elbow 샘플 데이터를 inch 단위 스펙으로 받아 cm로 변환하여 생성. 직경은 (min,max,num_intervals) 형식.")
     parser.add_argument("n", type=int, help="생성할 전체 샘플 수")
     parser.add_argument("-o","--output", default="elbow_samples.xlsx", help="출력 엑셀 파일명")
     parser.add_argument("--seed", type=int, default=42, help="난수 시드")
-    parser.add_argument("--bin_width_inch", type=float, required=True, help="직경 bin 너비 (inch)")
-    parser.add_argument("--diameter_inch_min", type=float, required=True, help="최소 직경 (inch)")
-    parser.add_argument("--diameter_inch_max", type=float, required=True, help="최대 직경 (inch)")
-    parser.add_argument("--angles_deg", type=lambda s: [int(item) for item in s.split(',')], required=True, help="각도 리스트 (쉼표로 구분)")
+    parser.add_argument("--diameter_inch_spec", type=parse_spec, required=True, help="직경 스펙 (inch): min,max,intervals (예: '1.0,5.0,2')")
+    parser.add_argument("--angles_deg", type=lambda s: [int(item) for item in s.split(',')], required=True, help="각도 리스트 (쉼표로 구분, 예: '15,30,45')")
     args = parser.parse_args()
 
     run(
         output_file=args.output,
         total_samples=args.n,
-        bin_width_inch=args.bin_width_inch,
-        diameter_inch_min=args.diameter_inch_min,
-        diameter_inch_max=args.diameter_inch_max,
+        diameter_inch_spec=args.diameter_inch_spec,
         angles_deg_list=args.angles_deg,
         seed=args.seed
     )

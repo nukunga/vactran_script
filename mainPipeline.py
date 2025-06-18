@@ -10,7 +10,35 @@ import pandas as pd
 from sampleDataGen import pipeDataGen, elbowDataGen, reducerDataGen, expanderDataGen
 from genVtser import pipeGenerate, elbowGenerate, reducerGenerate
 from dataPreprosessor import pipePrepro, elbowPrepro, reducerPrepro
-from autoVacModule import run_vactran_automation
+# from autoVacModule import run_vactran_automation # 기존 임포트 라인 주석 처리 또는 삭제
+
+# autoVacModule 임포트 시도 및 clipboard 관련 오류 처리
+AUTO_VAC_MODULE_AVAILABLE = False
+try:
+    from autoVacModule import run_vactran_automation
+    AUTO_VAC_MODULE_AVAILABLE = True
+except ImportError as e:
+    # 에러 메시지에 'clipboard'가 포함되어 있는지 확인 (대소문자 구분 없이)
+    if 'clipboard' in str(e).lower():
+        print(f"WARNING (mainPipeline.py): Failed to import 'autoVacModule', likely due to missing 'clipboard' module: {e}")
+        print("                         VacTran automation (pipeline step 3) will be unavailable if mainPipeline.py is run directly.")
+        print("                         To enable it, please install the 'clipboard' module (e.g., 'pip install clipboard') and ensure its dependencies are met in your Python environment.")
+        
+        # run_vactran_automation을 호출 시 오류를 발생시키는 플레이스홀더 함수로 정의
+        def run_vactran_automation(*args, **kwargs):
+            error_message = (
+                "run_vactran_automation cannot be executed because 'autoVacModule' failed to load "
+                "due to a missing 'clipboard' dependency. Please check startup warnings."
+            )
+            raise ImportError(error_message)
+    else:
+        # 'clipboard'와 관련 없는 다른 ImportError의 경우, 에러를 다시 발생시켜 파악하도록 함
+        print(f"ERROR (mainPipeline.py): Failed to import 'autoVacModule' for a reason other than 'clipboard': {e}")
+        raise
+except Exception as e_other: # 다른 예외 처리 (예: autoVacModule.py 내부의 구문 오류 등)
+    print(f"ERROR (mainPipeline.py): An unexpected error occurred while trying to import 'autoVacModule': {e_other}")
+    raise
+
 
 # 프로젝트 루트 디렉터리 설정
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -19,29 +47,23 @@ def get_generation_parameters(item_type):
     """각 아이템 타입별 데이터 생성 파라미터 기본값을 반환합니다."""
     base_params = {
         "pipe": {
-            "diameter_inch_range": (1.0, 10.0), # 파이프 직경 범위 (단위: inch). 내부적으로 cm로 변환.
-            "length_mm_range": (100, 20000),   # 파이프 길이 범위 (단위: mm). 내부적으로 cm로 변환.
-            "bin_width_inch": 1.0,             # 직경 샘플링 시 사용될 bin의 너비 (단위: inch).
+            "diameter_inch_spec": (1.0, 10.0, 5), # 파이프 직경 (min_inch, max_inch, num_intervals)
+            "length_mm_spec": (100, 20000, 10),   # 파이프 길이 (min_mm, max_mm, num_intervals)
         },
         "elbow": {
-            "diameter_inch_range": (1.0, 5.0), # 엘보 직경 범위 (단위: inch). 내부적으로 cm로 변환.
-            "bin_width_inch": 1.0,             # 직경 샘플링 시 사용될 bin의 너비 (단위: inch).
-            "angles_deg": [15, 20, 30, 45],    # 생성될 엘보의 각도 목록.
-            "quantity": 1,                     # VTSER 파일에 기록될 수량.
+            "diameter_inch_spec": (1.0, 5.0, 4),  # 엘보 직경 (min_inch, max_inch, num_intervals)
+            "angles_deg": [15, 20, 30, 45],       # 생성될 엘보의 각도 목록.
+            "quantity": 1,                        # VTSER 파일에 기록될 수량.
         },
-        "reducer": { # D2 기준으로 샘플링, D1_cm > D2_cm, D2_cm < 0.7 * D1_cm
-            "D2_inch_range": (1.0, 10.0),       # Reducer 작은 쪽 직경(D2) 샘플링 범위 (단위: inch). 내부 cm 변환.
-            "D2_bin_width_inch": 1.0,           # D2 직경 샘플링 bin 너비 (단위: inch).
-            "D1_inch_min_overall": 0.5,       # Reducer 큰 쪽 직경(D1) 전체 최소값 (단위: inch). 내부 cm 변환.
-            "D1_inch_max_overall": 14.3,      # Reducer 큰 쪽 직경(D1) 전체 최대값 (단위: inch). (D2 최대값 10인치 / 0.7 고려). 내부 cm 변환.
-            "length_mm_range": (50.0, 10000.0), # Reducer 길이 범위 (단위: mm). VACTRAN 입력 기준 cm 변환.
+        "reducer": { 
+            "d1_inch_spec": (0.8, 12.0, 10),      # Reducer 큰 쪽 직경(D1) (min_inch, max_inch, num_intervals)
+            "d2_inch_spec": (0.5, 8.0, 10),       # Reducer 작은 쪽 직경(D2) (min_inch, max_inch, num_intervals)
+            "length_mm_spec": (25.0, 1000.0, 10), # Reducer 길이 (min_mm, max_mm, num_intervals)
         },
-        "expander": { # D1 기준으로 샘플링, D2_cm > D1_cm, D1_cm < 0.7 * D2_cm
-            "D1_inch_range": (1.0, 10.0),       # Expander 작은 쪽 직경(D1) 샘플링 범위 (단위: inch). 내부 cm 변환.
-            "D1_bin_width_inch": 1.0,           # D1 직경 샘플링 bin 너비 (단위: inch).
-            "D2_inch_min_overall": 0.5,       # Expander 큰 쪽 직경(D2) 전체 최소값 (단위: inch). 내부 cm 변환.
-            "D2_inch_max_overall": 14.3,      # Expander 큰 쪽 직경(D2) 전체 최대값 (단위: inch). (D1 최대값 10인치 / 0.7 고려). 내부 cm 변환.
-            "length_mm_range": (50.0, 10000.0), # Expander 길이 범위 (단위: mm). VACTRAN 입력 기준 cm 변환.
+        "expander": { 
+            "d1_inch_spec": (0.5, 8.0, 10),       # Expander 작은 쪽 직경(D1) (min_inch, max_inch, num_intervals)
+            "d2_inch_spec": (0.8, 12.0, 10),      # Expander 큰 쪽 직경(D2) (min_inch, max_inch, num_intervals)
+            "length_mm_spec": (25.0, 1000.0, 10), # Expander 길이 (min_mm, max_mm, num_intervals)
         }
     }
 
@@ -49,33 +71,40 @@ def get_generation_parameters(item_type):
     if not params:
         return {"description": "N/A - Unknown item type"}
 
-    # Descriptions for logging and headers, no change from original
+    # Descriptions for logging and headers
     if item_type == "pipe":
+        dia_spec = params['diameter_inch_spec']
+        len_spec = params['length_mm_spec']
         params["description"] = (
-            f"Pipe: Diameter {params['diameter_inch_range'][0]}-{params['diameter_inch_range'][1]} inches "
-            f"(binned by {params['bin_width_inch']} inch, converted to cm internally), "
-            f"Length {params['length_mm_range'][0]}-{params['length_mm_range'][1]} mm (converted to cm internally)."
+            f"Pipe: Diameter {dia_spec[0]}-{dia_spec[1]} inches ({dia_spec[2]} intervals, converted to cm internally), "
+            f"Length {len_spec[0]}-{len_spec[1]} mm ({len_spec[2]} intervals, converted to cm internally)."
         )
     elif item_type == "elbow":
+        dia_spec = params['diameter_inch_spec']
         params["description"] = (
-            f"Elbow: Diameter {params['diameter_inch_range'][0]}-{params['diameter_inch_range'][1]} inches "
-            f"(binned by {params['bin_width_inch']} inch, converted to cm internally), "
-            f"Angles ({', '.join(map(str, params['angles_deg']))} deg, sampled uniformly). " # 수정: angle_p45_prob 제거
+            f"Elbow: Diameter {dia_spec[0]}-{dia_spec[1]} inches ({dia_spec[2]} intervals, converted to cm internally), "
+            f"Angles ({', '.join(map(str, params['angles_deg']))} deg, sampled uniformly per dia_interval-angle combination). "
             f"Quantity={params['quantity']}."
         )
     elif item_type == "reducer":
-        params["description"] = ( # D2 기준으로 샘플링 설명 변경
-            f"Reducer (D2 binned, D1_cm > D2_cm, D2_cm < 0.7*D1_cm after internal cm conversion): "
-            f"D2 {params['D2_inch_range'][0]}-{params['D2_inch_range'][1]} inches (binned by {params['D2_bin_width_inch']} inch), "
-            f"D1 {params['D1_inch_min_overall']}-{params['D1_inch_max_overall']} inches (overall range for D2 sampling), "
-            f"Length {params['length_mm_range'][0]}-{params['length_mm_range'][1]} mm (converted to cm internally)." # cm -> mm
+        d1_spec = params['d1_inch_spec']
+        d2_spec = params['d2_inch_spec']
+        len_spec = params['length_mm_spec']
+        params["description"] = (
+            f"Reducer (D1_cm > D2_cm, D1_cm > 1.3*D2_cm after internal cm conversion): "
+            f"D1 {d1_spec[0]}-{d1_spec[1]} inches ({d1_spec[2]} intervals), "
+            f"D2 {d2_spec[0]}-{d2_spec[1]} inches ({d2_spec[2]} intervals), "
+            f"Length {len_spec[0]}-{len_spec[1]} mm ({len_spec[2]} intervals, converted to cm internally)."
         )
     elif item_type == "expander":
-        params["description"] = ( # D1 기준으로 샘플링 설명 변경
-            f"Expander (D1 binned, D2_cm > D1_cm, D1_cm < 0.7*D2_cm after internal cm conversion): "
-            f"D1 {params['D1_inch_range'][0]}-{params['D1_inch_range'][1]} inches (binned by {params['D1_bin_width_inch']} inch), "
-            f"D2 {params['D2_inch_min_overall']}-{params['D2_inch_max_overall']} inches (overall range for D1 sampling), "
-            f"Length {params['length_mm_range'][0]}-{params['length_mm_range'][1]} mm (converted to cm internally)." # cm -> mm
+        d1_spec = params['d1_inch_spec']
+        d2_spec = params['d2_inch_spec']
+        len_spec = params['length_mm_spec']
+        params["description"] = (
+            f"Expander (D2_cm > D1_cm, D2_cm > 1.3*D1_cm after internal cm conversion): "
+            f"D1 {d1_spec[0]}-{d1_spec[1]} inches ({d1_spec[2]} intervals), "
+            f"D2 {d2_spec[0]}-{d2_spec[1]} inches ({d2_spec[2]} intervals), "
+            f"Length {len_spec[0]}-{len_spec[1]} mm ({len_spec[2]} intervals, converted to cm internally)."
         )
     return params
 
@@ -84,25 +113,23 @@ def format_specs_for_filename(item_type, params):
     if not isinstance(params, dict): return ""
     try:
         if item_type == "pipe":
-            d_rng_in = params.get("diameter_inch_range", ("N/A","N/A"))
-            l_rng_mm = params.get("length_mm_range", ("N/A","N/A"))
-            return f"D{d_rng_in[0]}-{d_rng_in[1]}in_L{l_rng_mm[0]}-{l_rng_mm[1]}mm"
+            d_spec = params.get("diameter_inch_spec", ("N/A","N/A","N/A"))
+            l_spec = params.get("length_mm_spec", ("N/A","N/A","N/A"))
+            return f"D{d_spec[0]}-{d_spec[1]}in({d_spec[2]})_L{l_spec[0]}-{l_spec[1]}mm({l_spec[2]})"
         elif item_type == "elbow":
-            d_rng_in = params.get("diameter_inch_range", ("N/A","N/A"))
+            d_spec = params.get("diameter_inch_spec", ("N/A","N/A","N/A"))
             a_rng = params.get("angles_deg", ["N/A"])
-            return f"D{d_rng_in[0]}-{d_rng_in[1]}in_Ang{min(a_rng)}-{max(a_rng)}deg"
-        elif item_type == "reducer": # D2 기준으로 변경, 길이 mm
-            d2_rng_in = params.get("D2_inch_range", ("N/A","N/A"))
-            d1_min_in = params.get("D1_inch_min_overall", "N/A")
-            d1_max_in = params.get("D1_inch_max_overall", "N/A")
-            l_rng_mm = params.get("length_mm_range", ("N/A","N/A")) # cm -> mm
-            return f"D2_{d2_rng_in[0]}-{d2_rng_in[1]}in_D1_{d1_min_in}-{d1_max_in}in_L{l_rng_mm[0]}-{l_rng_mm[1]}mm" # cm -> mm
-        elif item_type == "expander": # D1 기준으로 변경, 길이 mm
-            d1_rng_in = params.get("D1_inch_range", ("N/A","N/A"))
-            d2_min_in = params.get("D2_inch_min_overall", "N/A")
-            d2_max_in = params.get("D2_inch_max_overall", "N/A")
-            l_rng_mm = params.get("length_mm_range", ("N/A","N/A")) # cm -> mm
-            return f"D1_{d1_rng_in[0]}-{d1_rng_in[1]}in_D2_{d2_min_in}-{d2_max_in}in_L{l_rng_mm[0]}-{l_rng_mm[1]}mm" # cm -> mm
+            return f"D{d_spec[0]}-{d_spec[1]}in({d_spec[2]})_Ang{min(a_rng)}-{max(a_rng)}deg"
+        elif item_type == "reducer":
+            d1_spec = params.get("d1_inch_spec", ("N/A","N/A","N/A"))
+            d2_spec = params.get("d2_inch_spec", ("N/A","N/A","N/A"))
+            l_spec = params.get("length_mm_spec", ("N/A","N/A","N/A"))
+            return f"D1_{d1_spec[0]}-{d1_spec[1]}in({d1_spec[2]})_D2_{d2_spec[0]}-{d2_spec[1]}in({d2_spec[2]})_L{l_spec[0]}-{l_spec[1]}mm({l_spec[2]})"
+        elif item_type == "expander":
+            d1_spec = params.get("d1_inch_spec", ("N/A","N/A","N/A"))
+            d2_spec = params.get("d2_inch_spec", ("N/A","N/A","N/A"))
+            l_spec = params.get("length_mm_spec", ("N/A","N/A","N/A"))
+            return f"D1_{d1_spec[0]}-{d1_spec[1]}in({d1_spec[2]})_D2_{d2_spec[0]}-{d2_spec[1]}in({d2_spec[2]})_L{l_spec[0]}-{l_spec[1]}mm({l_spec[2]})"
     except Exception:
         return "SpecError"
     return "UnknownSpec"
@@ -123,32 +150,26 @@ def generate_csv_header_specs(item_type, num_samples, seed, params):
     param_details = []
     if item_type == "pipe":
         param_details.extend([
-            f"# - Diameter inch range (for binning): {params.get('diameter_inch_range', 'N/A')}",
-            f"# - Length mm range: {params.get('length_mm_range', 'N/A')}",
-            f"# - Bin width inch: {params.get('bin_width_inch', 'N/A')}"
+            f"# - Diameter inch spec (min,max,intervals): {params.get('diameter_inch_spec', 'N/A')}",
+            f"# - Length mm spec (min,max,intervals): {params.get('length_mm_spec', 'N/A')}",
         ])
     elif item_type == "elbow":
         param_details.extend([
-            f"# - Diameter inch range (for binning): {params.get('diameter_inch_range', 'N/A')}",
-            f"# - Bin width inch: {params.get('bin_width_inch', 'N/A')}",
-            f"# - Angles deg: {params.get('angles_deg', 'N/A')}", # angle_p45_prob 제거
+            f"# - Diameter inch spec (min,max,intervals): {params.get('diameter_inch_spec', 'N/A')}",
+            f"# - Angles deg list: {params.get('angles_deg', 'N/A')}",
             f"# - Quantity: {params.get('quantity', 'N/A')}"
         ])
-    elif item_type == "reducer": # D2 기준, 길이 mm
+    elif item_type == "reducer":
         param_details.extend([
-            f"# - D2 inch range (for binning): {params.get('D2_inch_range', 'N/A')}",
-            f"# - D2 bin width inch: {params.get('D2_bin_width_inch', 'N/A')}",
-            f"# - D1 inch min overall: {params.get('D1_inch_min_overall', 'N/A')}",
-            f"# - D1 inch max overall: {params.get('D1_inch_max_overall', 'N/A')}",
-            f"# - Length mm range: {params.get('length_mm_range', 'N/A')}" # cm -> mm
+            f"# - D1 inch spec (min,max,intervals): {params.get('d1_inch_spec', 'N/A')}",
+            f"# - D2 inch spec (min,max,intervals): {params.get('d2_inch_spec', 'N/A')}",
+            f"# - Length mm spec (min,max,intervals): {params.get('length_mm_spec', 'N/A')}"
         ])
-    elif item_type == "expander": # D1 기준, 길이 mm
+    elif item_type == "expander":
         param_details.extend([
-            f"# - D1 inch range (for binning): {params.get('D1_inch_range', 'N/A')}",
-            f"# - D1 bin width inch: {params.get('D1_bin_width_inch', 'N/A')}",
-            f"# - D2 inch min overall: {params.get('D2_inch_min_overall', 'N/A')}",
-            f"# - D2 inch max overall: {params.get('D2_inch_max_overall', 'N/A')}",
-            f"# - Length mm range: {params.get('length_mm_range', 'N/A')}" # cm -> mm
+            f"# - D1 inch spec (min,max,intervals): {params.get('d1_inch_spec', 'N/A')}",
+            f"# - D2 inch spec (min,max,intervals): {params.get('d2_inch_spec', 'N/A')}",
+            f"# - Length mm spec (min,max,intervals): {params.get('length_mm_spec', 'N/A')}"
         ])
 
     header_lines.extend(param_details)
@@ -204,11 +225,8 @@ def main():
             pipeDataGen.run(
                 output_file=sample_data_excel_path,
                 total_samples=num_samples,
-                bin_width_inch=params["bin_width_inch"],
-                diameter_inch_min=params["diameter_inch_range"][0],
-                diameter_inch_max=params["diameter_inch_range"][1],
-                length_mm_min=params["length_mm_range"][0],
-                length_mm_max=params["length_mm_range"][1],
+                diameter_inch_spec=params["diameter_inch_spec"],
+                length_mm_spec=params["length_mm_spec"],
                 seed=seed
             )
         elif item_type == 'elbow':
@@ -216,38 +234,28 @@ def main():
             elbowDataGen.run(
                 output_file=sample_data_excel_path,
                 total_samples=num_samples,
-                bin_width_inch=params["bin_width_inch"],
-                diameter_inch_min=params["diameter_inch_range"][0],
-                diameter_inch_max=params["diameter_inch_range"][1],
+                diameter_inch_spec=params["diameter_inch_spec"],
                 angles_deg_list=params["angles_deg"],
                 seed=seed
             )
-        elif item_type == 'reducer': # D2 기준, 길이 mm
+        elif item_type == 'reducer':
             params = generation_params
             reducerDataGen.run(
                  output_file=sample_data_excel_path,
                  total_samples=num_samples,
-                 d2_bin_width_inch=params["D2_bin_width_inch"],       # D1 -> D2
-                 d2_inch_min=params["D2_inch_range"][0],             # D1 -> D2
-                 d2_inch_max=params["D2_inch_range"][1],             # D1 -> D2
-                 d1_inch_min_overall=params["D1_inch_min_overall"], # D2 -> D1
-                 d1_inch_max_overall=params["D1_inch_max_overall"], # D2 -> D1
-                 length_mm_min=params["length_mm_range"][0],         # cm -> mm
-                 length_mm_max=params["length_mm_range"][1],         # cm -> mm
+                 d1_inch_spec=params["d1_inch_spec"],
+                 d2_inch_spec=params["d2_inch_spec"],
+                 length_mm_spec=params["length_mm_spec"],
                  seed=seed
             )
-        elif item_type == 'expander': # D1 기준, 길이 mm
+        elif item_type == 'expander':
             params = generation_params
             expanderDataGen.run(
                 output_file=sample_data_excel_path,
                 total_samples=num_samples,
-                d1_bin_width_inch=params["D1_bin_width_inch"],       # D2 -> D1
-                d1_inch_min=params["D1_inch_range"][0],             # D2 -> D1
-                d1_inch_max=params["D1_inch_range"][1],             # D2 -> D1
-                d2_inch_min_overall=params["D2_inch_min_overall"], # D1 -> D2
-                d2_inch_max_overall=params["D2_inch_max_overall"], # D1 -> D2
-                length_mm_min=params["length_mm_range"][0],         # cm -> mm
-                length_mm_max=params["length_mm_range"][1],         # cm -> mm
+                d1_inch_spec=params["d1_inch_spec"],
+                d2_inch_spec=params["d2_inch_spec"],
+                length_mm_spec=params["length_mm_spec"],
                 seed=seed
             )
         print(f"샘플 데이터 생성 완료: {sample_data_excel_path}")
@@ -277,9 +285,17 @@ def main():
     # --- 3. auto_vac_module 실행 ---
     print(f"\n[단계 3/{total_steps}] VacTran 자동화 실행 중...")
     try:
-        run_vactran_automation(vtser_output_dir, txt_output_dir)
+        if not AUTO_VAC_MODULE_AVAILABLE:
+            # AUTO_VAC_MODULE_AVAILABLE 플래그를 사용하여 모듈 로드 실패 시 사용자에게 알림
+            raise ImportError("VacTran automation (step 3) skipped: 'autoVacModule' could not be loaded, likely due to a missing 'clipboard' dependency. Check startup warnings.")
+        
+        run_vactran_automation(vtser_output_dir, txt_output_dir) # 실제 함수 또는 플레이스홀더 함수가 호출됨
         print(f"VacTran 자동화 완료. TXT 파일 저장 위치: {txt_output_dir}")
         print(f"--- 단계 3/{total_steps} 완료 ({(3/total_steps)*100:.0f}%) ---")
+    except ImportError as e_imp: # autoVacModule 로드 실패 또는 플레이스홀더 호출로 인한 ImportError
+        print(f"!!! VacTran 자동화 중단 (ImportError): {e_imp} !!!")
+        print("파이프라인의 이 단계는 건너뛰고 다음 단계로 진행하지 않습니다. 문제를 해결하고 다시 시도해주세요.")
+        sys.exit(1)
     except Exception as e:
         print(f"!!! VacTran 자동화 중 오류 발생: {e} !!!")
         print("파이프라인 중단.")

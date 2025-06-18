@@ -62,7 +62,7 @@ def run_vactran_automation(input_dir_path, output_dir_path):
             keyboard.send_keys('6')
             time.sleep(0.2)
             keyboard.send_keys('{ENTER}')
-            time.sleep(1.5)
+            time.sleep(1.0)
 
             keyboard.send_keys('%G') # Alt + G
             time.sleep(0.5)
@@ -70,7 +70,7 @@ def run_vactran_automation(input_dir_path, output_dir_path):
                 keyboard.send_keys('{DOWN}')
                 time.sleep(0.1)
             keyboard.send_keys('{ENTER}')
-            time.sleep(10) # 그래프 생성 대기 (중요)
+            time.sleep(5) # 그래프 생성 대기 (중요)
 
             # 3) Main Text Window (Conductance 데이터) 저장
             main_win.set_focus()
@@ -110,7 +110,7 @@ def run_vactran_automation(input_dir_path, output_dir_path):
             keyboard.send_keys('{RIGHT}') # 오른쪽 화살표 키 입력
             time.sleep(0.2) # 탭 키 입력 전 짧은 대기
             keyboard.send_keys('{TAB}') # 탭 키 입력
-            time.sleep(1.5) # Series Text Window 활성화 및 내용 로드 대기
+            time.sleep(1.0) # Series Text Window 활성화 및 내용 로드 대기
 
             # 7) Series Text Window 내용 복사 (Ctrl+A, Ctrl+C) 및 저장
             time.sleep(1)
