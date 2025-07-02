@@ -48,7 +48,7 @@ def process_batch(batch_files: List[str], input_dir_path: str, output_dir_path: 
             # 프로세스가 시작되고 창을 열 충분한 시간을 줍니다.
             time.sleep(1)
 
-            for attempt in range(5):
+            for attempt in range(10):
                 try:
                     # 제목에 'Error'가 포함된 창을 찾습니다 (대소문자 무관).
                     # timeout=0.5 로 설정하여 창이 없으면 즉시 다음으로 넘어갑니다.

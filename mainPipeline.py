@@ -57,11 +57,11 @@ def get_generation_parameters(item_type):
         },
         "reducer": { 
             "d1_inch_spec": (0.8, 12.0, 10),      # Reducer 큰 쪽 직경(D1) (min_inch, max_inch, num_intervals)
-            "d2_inch_spec": (0.5, 8.0, 10),       # Reducer 작은 쪽 직경(D2) (min_inch, max_inch, num_intervals)
+            "d2_inch_spec": (0.5, 12.0, 10),       # Reducer 작은 쪽 직경(D2) (min_inch, max_inch, num_intervals)
             "length_mm_spec": (25.0, 1000.0, 10), # Reducer 길이 (min_mm, max_mm, num_intervals)
         },
         "expander": { 
-            "d1_inch_spec": (0.5, 8.0, 10),       # Expander 작은 쪽 직경(D1) (min_inch, max_inch, num_intervals)
+            "d1_inch_spec": (0.5, 12.0, 10),       # Expander 작은 쪽 직경(D1) (min_inch, max_inch, num_intervals)
             "d2_inch_spec": (0.8, 12.0, 10),      # Expander 큰 쪽 직경(D2) (min_inch, max_inch, num_intervals)
             "length_mm_spec": (25.0, 1000.0, 10), # Expander 길이 (min_mm, max_mm, num_intervals)
         }
